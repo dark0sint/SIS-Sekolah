@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SIS Sekolah</title><link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0f766e">
+<style>
+:root{--bg:#f4f6f8;--c:#fff;--t:#1b2530;--m:#64707d;--p:#0f766e;--b:#dde3e8}
+@media(prefers-color-scheme:dark){:root{--bg:#10161c;--c:#18212a;--t:#e8edf2;--m:#93a0ad;--b:#2a3642}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--t);padding-top:env(safe-area-inset-top)}
+header{background:var(--p);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+nav{display:flex;gap:6px;overflow-x:auto;padding:8px 12px;background:var(--c);border-bottom:1px solid var(--b)}
+nav button{white-space:nowrap;border:1px solid var(--b);background:none;color:var(--t);padding:7px 12px;border-radius:99px;cursor:pointer}
+nav button.on{background:var(--p);color:#fff;border-color:var(--p)}
+main{padding:14px;max-width:1100px;margin:auto}.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.k b{font-size:24px;display:block}.k span{color:var(--m);font-size:13px}
+.wrap{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{padding:8px;border-bottom:1px solid var(--b);text-align:left;white-space:nowrap}th{color:var(--m);font-weight:600;font-size:13px}
+input,select,textarea{width:100%;padding:9px;margin:4px 0 10px;border:1px solid var(--b);border-radius:8px;background:var(--bg);color:var(--t);font:inherit}
+.btn{background:var(--p);color:#fff;border:0;padding:8px 14px;border-radius:8px;cursor:pointer;font:inherit}.btn.s{background:var(--m);padding:4px 9px;font-size:13px}.btn.d{background:#b42318;padding:4px 9px;font-size:13px}
+dialog{border:1px solid var(--b);border-radius:12px;background:var(--c);color:var(--t);width:min(420px,92vw)}label{font-size:13px;color:var(--m)}
+.login{max-width:360px;margin:8vh auto}
+</style></head><body>
+<header><b id="ttl">SIS Sekolah</b><span id="who"></span></header><nav id="nav"></nav><main id="app"></main><dialog id="dlg"></dialog>
+<script>
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+const $=s=>document.querySelector(s),rp=n=>'Rp '+Number(n||0).toLocaleString('id-ID');
+let S=JSON.parse(localStorage.sis||'null'),META={};
+const api=async(p,o={})=>{const r=await fetch('/api/'+p,{method:o.method||'GET',headers:{'Content-Type':'application/json',Authorization:'Bearer '+(S?.token||'')},body:o.body&&JSON.stringify(o.body)});
+ if(r.status===401&&S){logout();return}const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'Gagal');return j};
+const logout=()=>{localStorage.removeItem('sis');S=null;start()};
+function loginView(){$('#nav').innerHTML='';$('#who').textContent='';$('#app').innerHTML=`<div class="card login"><h3>Masuk</h3>
+<input id="u" placeholder="Username"><input id="p" type="password" placeholder="Password"><button class="btn" style="width:100%" onclick="doLogin()">Masuk</button>
+<p style="text-align:center"><a href="#" onclick="ppdb();return false">Daftar PPDB / Cek Status</a></p></div>`}
+async function doLogin(){try{S=await api('login',{method:'POST',body:{username:$('#u').value,password:$('#p').value}});localStorage.sis=JSON.stringify(S);start()}catch(e){alert(e.message)}}
+function ppdb(){$('#app').innerHTML=`<div class="card login"><h3>PPDB Online</h3><input id="n" placeholder="Nama lengkap"><input id="k" placeholder="NIK"><input id="a" placeholder="Asal sekolah"><input id="h" placeholder="No. HP">
+<button class="btn" onclick="sendP()">Daftar</button> <button class="btn s" onclick="cekP()">Cek status NIK</button> <button class="btn s" onclick="loginView()">Kembali</button></div>`}
+async function sendP(){try{await api('ppdb',{method:'POST',body:{nama:$('#n').value,nik:$('#k').value,asal_sekolah:$('#a').value,hp:$('#h').value}});alert('Pendaftaran terkirim')}catch(e){alert(e.message)}}
+async function cekP(){const r=await api('ppdb/cek?nik='+encodeURIComponent($('#k').value));alert('Status: '+r.status)}
+async function start(){if(!S)return loginView();$('#who').innerHTML=`${S.user.name} (${S.user.role}) <a href="#" style="color:#fff" onclick="logout();return false">Keluar</a>`;
+ META=await api('meta');const items=[['dash','Dashboard'],['rapor','Rapor'],...Object.entries(META).map(([k,m])=>[k,m.label])];
+ $('#nav').innerHTML=items.map(([k,l])=>`<button data-k="${k}" onclick="go('${k}')">${l}</button>`).join('')+(S.user.role==='admin'?`<button onclick="location='/api/export/dapodik'" id="ex">Ekspor Dapodik</button>`:'');go('dash')}
+async function go(k){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+ if(k==='dash'){const d=await api('dashboard');$('#app').innerHTML=`<div class="grid">${[['Siswa',d.siswa],['Guru',d.guru],['Pelamar PPDB',d.pelamar],['Kehadiran',d.hadirPersen+'%'],['Pemasukan',rp(d.pemasukan)],['Tunggakan',rp(d.tunggakan)]].map(([l,v])=>`<div class="card k"><b>${v}</b><span>${l}</span></div>`).join('')}</div>`}
+ else if(k==='rapor'){let id=S.user.ref_id||prompt('ID siswa:');if(!id)return;try{const r=await api('rapor/'+id);$('#app').innerHTML=`<div class="card"><h3>Rapor: ${r.siswa?.nama||'-'}</h3><div class="wrap"><table><tr><th>Mapel</th><th>Rata-rata</th><th>Jml nilai</th></tr>${r.nilai.map(n=>`<tr><td>${n.mapel}</td><td>${n.rata}</td><td>${n.n}</td></tr>`).join('')||'<tr><td colspan=3>Belum ada nilai</td></tr>'}</table></div></div>`}catch(e){alert(e.message)}}
+ else table(k)}
+async function table(k){const m=META[k],rows=await api('t/'+k);window.ROWS=rows;
+ $('#app').innerHTML=`<div class="card"><div style="display:flex;justify-content:space-between"><h3 style="margin:0">${m.label}</h3>${m.write?`<button class="btn" onclick="form('${k}')">+ Tambah</button>`:''}</div>
+ <div class="wrap"><table><tr>${m.cols.map(c=>`<th>${c.replace(/_/g,' ')}</th>`).join('')}<th></th></tr>${rows.map(r=>`<tr>${m.cols.map(c=>`<td>${r[c]??''}</td>`).join('')}<td>
+ ${k==='invoices'&&r.status!=='lunas'?`<button class="btn s" onclick="pay(${r.id})">Bayar</button> `:''}${m.write?`<button class="btn s" onclick="form('${k}',${r.id})">Ubah</button> <button class="btn d" onclick="del('${k}',${r.id})">Hapus</button>`:''}</td></tr>`).join('')}</table></div></div>`}
+function form(k,id){const m=META[k],r=id?ROWS.find(x=>x.id===id):{};$('#dlg').innerHTML=`<h3>${m.label}</h3>${m.cols.map(c=>`<label>${c.replace(/_/g,' ')}</label><input id="f_${c}" value="${r[c]??''}">`).join('')}
+ <button class="btn" onclick="save('${k}',${id||0})">Simpan</button> <button class="btn s" onclick="$('#dlg').close()">Batal</button>`;$('#dlg').showModal()}
+async function save(k,id){const b={};META[k].cols.forEach(c=>b[c]=$('#f_'+c).value);try{await api('t/'+k+(id?'/'+id:''),{method:id?'PUT':'POST',body:b});$('#dlg').close();table(k)}catch(e){alert(e.message)}}
+async function del(k,id){if(confirm('Hapus data?')){await api(`t/${k}/${id}`,{method:'DELETE'});table(k)}}
+async function pay(id){await api(`invoices/${id}/pay`,{method:'POST'});table('invoices')}
+start();
+</script></body></html>
